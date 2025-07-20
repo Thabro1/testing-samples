@@ -1,330 +1,110 @@
--- UI + ESP Toggle Integration by ChatGPT
-
-local Settings = {
-    Box_Color = Color3.fromRGB(255, 0, 0),
-    Tracer_Color = Color3.fromRGB(255, 0, 0),
-    Tracer_Thickness = 1,
-    Box_Thickness = 1,
-    Tracer_Origin = "Bottom",
-    Tracer_FollowMouse = false,
-    Tracers = false -- Tracer disabled
-}
-
-local Team_Check = {
-    TeamCheck = false,
-    Green = Color3.fromRGB(0, 255, 0),
-    Red = Color3.fromRGB(255, 0, 0)
-}
-
-local TeamColor = true
-local ESP_Enabled = true
-
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
-local mouse = player:GetMouse()
-
--- GUI Setup
-local ScreenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-ScreenGui.Name = "ESPGui"
-ScreenGui.ResetOnSpawn = false
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 120, 0, 30)
-toggleButton.Position = UDim2.new(0, 20, 0, 100)
-toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-toggleButton.TextColor3 = Color3.new(1, 1, 1)
-toggleButton.Text = "ESP: ON"
-toggleButton.Font = Enum.Font.SourceSansBold
-toggleButton.TextSize = 18
-toggleButton.Parent = ScreenGui
-
-toggleButton.MouseButton1Click:Connect(function()
-    ESP_Enabled = not ESP_Enabled
-    toggleButton.Text = "ESP: " .. (ESP_Enabled and "ON" or "OFF")
-end)
-
--- Dragging support
-local dragging, dragInput, dragStart, startPos
-
-toggleButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = toggleButton.Position
-
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-toggleButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInput = input
-    end
-end)
-
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
-                                          startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
--- Drawing API
-local function NewQuad(thickness, color)
-    local quad = Drawing.new("Quad")
-    quad.Visible = false
-    quad.Filled = false
-    quad.Thickness = thickness
-    quad.Color = color
-    quad.Transparency = 1
-    return quad
-end
-
-local function NewLine(thickness, color)
-    local line = Drawing.new("Line")
-    line.Visible = false
-    line.Thickness = thickness
-    line.Color = color
-    line.Transparency = 1
-    return line
-end
-
-local function NewText(text, color)
-    local txt = Drawing.new("Text")
-    txt.Visible = false
-    txt.Text = text
-    txt.Size = 16
-    txt.Color = color
-    txt.Center = true
-    txt.Outline = true
-    txt.OutlineColor = Color3.new(0, 0, 0)
-    txt.Transparency = 1
-    return txt
-end
-
-local function Visibility(state, lib)
-    for _, v in pairs(lib) do
-        v.Visible = state
-    end
-end
-
-local function ESP(plr)
-    local library = {
-        black = NewQuad(Settings.Box_Thickness * 2, Color3.new(0,0,0)),
-        box = NewQuad(Settings.Box_Thickness, Settings.Box_Color),
-        healthbar = NewLine(3, Color3.new(0,0,0)),
-        greenhealth = NewLine(1.5, Color3.new(0,0,0)),
-        name = NewText(plr.Name, Color3.new(1,1,1))
-    }
-
-    local function Colorize(color)
-        library.box.Color = color
-    end
-
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if not ESP_Enabled then
-            Visibility(false, library)
-            return
-        end
-
-        if plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character.Humanoid.Health > 0 and plr.Character:FindFirstChild("Head") then
-            local HumPos, OnScreen = camera:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
-            if OnScreen then
-                local head = camera:WorldToViewportPoint(plr.Character.Head.Position)
-                local DistanceY = math.clamp((Vector2.new(head.X, head.Y) - Vector2.new(HumPos.X, HumPos.Y)).magnitude, 2, math.huge)
-
-                local function Size(item)
-                    item.PointA = Vector2.new(HumPos.X + DistanceY, HumPos.Y - DistanceY * 2)
-                    item.PointB = Vector2.new(HumPos.X - DistanceY, HumPos.Y - DistanceY * 2)
-                    item.PointC = Vector2.new(HumPos.X - DistanceY, HumPos.Y + DistanceY * 2)
-                    item.PointD = Vector2.new(HumPos.X + DistanceY, HumPos.Y + DistanceY * 2)
-                end
-                Size(library.box)
-                Size(library.black)
-
-                -- Health Bar
-                local d = (Vector2.new(HumPos.X - DistanceY, HumPos.Y - DistanceY * 2) - Vector2.new(HumPos.X - DistanceY, HumPos.Y + DistanceY * 2)).magnitude
-                local healthoffset = plr.Character.Humanoid.Health / plr.Character.Humanoid.MaxHealth * d
-                library.greenhealth.From = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY * 2)
-                library.greenhealth.To = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY * 2 - healthoffset)
-                library.healthbar.From = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y + DistanceY * 2)
-                library.healthbar.To = Vector2.new(HumPos.X - DistanceY - 4, HumPos.Y - DistanceY * 2)
-
-                -- Name
-                library.name.Position = Vector2.new(HumPos.X, HumPos.Y - DistanceY * 2 - 14)
-                library.name.Text = plr.Name
-
-                -- Color Setup
-                local green = Color3.fromRGB(0, 255, 0)
-                local red = Color3.fromRGB(255, 0, 0)
-                library.greenhealth.Color = red:lerp(green, plr.Character.Humanoid.Health / plr.Character.Humanoid.MaxHealth)
-
-                if Team_Check.TeamCheck then
-                    Colorize(plr.TeamColor == player.TeamColor and Team_Check.Green or Team_Check.Red)
-                elseif TeamColor then
-                    Colorize(plr.TeamColor.Color)
-                else
-                    library.box.Color = Settings.Box_Color
-                end
-
-                Visibility(true, library)
-            else
-                Visibility(false, library)
-            end
-        else
-            Visibility(false, library)
-            if not Players:FindFirstChild(plr.Name) then
-                connection:Disconnect()
-            end
-        end
-    end)
-end
-
--- Run ESP on players
-for _, v in pairs(Players:GetPlayers()) do
-    if v ~= player then
-        coroutine.wrap(ESP)(v)
-    end
-end
-
-Players.PlayerAdded:Connect(function(newplr)
-    if newplr ~= player then
-        coroutine.wrap(ESP)(newplr)
-    end
-end)
-Camera = workspace.CurrentCamera 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
-local Holding = false
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local RunService = game:GetService("RunService")
 
---// Create GUI
+local function clamp(n, min, max)
+	return math.clamp(n, min, max)
+end
+
+-- Create GUI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AimbotGUI"
+ScreenGui.Name = "SpeedSliderGUI"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.Parent = PlayerGui
 
 local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 200, 0, 50)
+Frame.Size = UDim2.new(0, 300, 0, 100)
 Frame.Position = UDim2.new(0, 100, 0, 100)
-Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 Frame.BorderSizePixel = 0
 Frame.Active = true
 Frame.Draggable = true
 Frame.Parent = ScreenGui
 
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(1, 0, 1, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-ToggleButton.BorderSizePixel = 0
-ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.TextSize = 18
-ToggleButton.TextColor3 = Color3.new(1, 1, 1)
-ToggleButton.Text = "Aimbot: ON"
-ToggleButton.Parent = Frame
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.Text = "Player Speed Control"
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 20
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Parent = Frame
 
---// Aimbot Config
-_G.AimbotEnabled = true
-_G.TeamCheck = false -- If set to true then the script only targets enemies
-_G.AimPart = "Head" -- Where the aimbot aims
-_G.Sensitivity = 0 -- Seconds to aim toward the target
+local SliderBack = Instance.new("Frame")
+SliderBack.Size = UDim2.new(1, -20, 0, 10)
+SliderBack.Position = UDim2.new(0, 10, 0, 40)
+SliderBack.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+SliderBack.BorderSizePixel = 0
+SliderBack.Parent = Frame
 
---// FOV Circle Config
-_G.CircleSides = 64
-_G.CircleColor = Color3.fromRGB(255, 255, 255)
-_G.CircleTransparency = 0.7
-_G.CircleRadius = 80
-_G.CircleFilled = false
-_G.CircleVisible = true
-_G.CircleThickness = 0
+local Slider = Instance.new("Frame")
+Slider.Size = UDim2.new(0, 10, 0, 20)
+Slider.Position = UDim2.new(0, 0, 0, -5)
+Slider.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+Slider.BorderSizePixel = 0
+Slider.Parent = SliderBack
 
---// Toggle Button Logic
-ToggleButton.MouseButton1Click:Connect(function()
-    _G.AimbotEnabled = not _G.AimbotEnabled
-    ToggleButton.Text = "Aimbot: " .. (_G.AimbotEnabled and "ON" or "OFF")
-end)
+local ValueLabel = Instance.new("TextLabel")
+ValueLabel.Size = UDim2.new(1, 0, 0, 25)
+ValueLabel.Position = UDim2.new(0, 0, 1, -5)
+ValueLabel.Text = "Speed: 100"
+ValueLabel.Font = Enum.Font.SourceSans
+ValueLabel.TextSize = 18
+ValueLabel.TextColor3 = Color3.new(1, 1, 1)
+ValueLabel.BackgroundTransparency = 1
+ValueLabel.Parent = Frame
 
---// FOV Circle Drawing
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-FOVCircle.Radius = _G.CircleRadius
-FOVCircle.Filled = _G.CircleFilled
-FOVCircle.Color = _G.CircleColor
-FOVCircle.Visible = _G.CircleVisible
-FOVCircle.Transparency = _G.CircleTransparency
-FOVCircle.NumSides = _G.CircleSides
-FOVCircle.Thickness = _G.CircleThickness
+-- Slider Logic
+local dragging = false
+local minSpeed = 100
+local maxSpeed = 1000
+local currentSpeed = 100
 
---// Find Closest Player Function
-local function GetClosestPlayer()
-    local maxDist = _G.CircleRadius
-    local target = nil
-    local mousePos = UserInputService:GetMouseLocation()
+local function updateSlider(posX)
+	local sliderWidth = SliderBack.AbsoluteSize.X
+	local offset = clamp(posX - SliderBack.AbsolutePosition.X, 0, sliderWidth)
+	local percent = offset / sliderWidth
+	local newSpeed = math.floor(clamp(minSpeed + (maxSpeed - minSpeed) * percent, minSpeed, maxSpeed))
+	currentSpeed = newSpeed
+	Slider.Position = UDim2.new(0, offset, 0, -5)
+	ValueLabel.Text = "Speed: " .. tostring(newSpeed)
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            if not _G.TeamCheck or player.Team ~= LocalPlayer.Team then
-                local humanoid = player.Character:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 0 then
-                    local screenPos, onScreen = Camera:WorldToScreenPoint(player.Character.HumanoidRootPart.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(mousePos.X, mousePos.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                        if dist < maxDist then
-                            maxDist = dist
-                            target = player
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return target
+	local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.WalkSpeed = currentSpeed
+	end
 end
 
---// Input Events
-UserInputService.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        Holding = true
-    end
+Slider.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+	end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        Holding = false
-    end
+SliderBack.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		updateSlider(input.Position.X)
+	end
 end)
 
---// Aimbot Loop
-RunService.RenderStepped:Connect(function()
-    -- Update FOV Circle
-    local mousePos = UserInputService:GetMouseLocation()
-    FOVCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
-    FOVCircle.Radius = _G.CircleRadius
-    FOVCircle.Filled = _G.CircleFilled
-    FOVCircle.Color = _G.CircleColor
-    FOVCircle.Visible = _G.CircleVisible
-    FOVCircle.Transparency = _G.CircleTransparency
-    FOVCircle.NumSides = _G.CircleSides
-    FOVCircle.Thickness = _G.CircleThickness
+game:GetService("UserInputService").InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
 
-    -- Aimbot Logic
-    if Holding and _G.AimbotEnabled then
-        local target = GetClosestPlayer()
-        if target and target.Character and target.Character:FindFirstChild(_G.AimPart) then
-            TweenService:Create(Camera, TweenInfo.new(_G.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
-                CFrame = CFrame.new(Camera.CFrame.Position, target.Character[_G.AimPart].Position)
-            }):Play()
-        end
-    end
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		updateSlider(input.Position.X)
+	end
+end)
+
+-- Apply speed on respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid")
+	hum.WalkSpeed = currentSpeed
 end)
